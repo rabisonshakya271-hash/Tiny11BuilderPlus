@@ -111,11 +111,4 @@ model NTLite uses for update integration.
   deploying them to real hardware.
 - This tool doesn't download Windows ISOs or updates for you; you supply
   them, so you stay in control of provenance and licensing.
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-  irm "https://raw.githubusercontent.com/rabisonshakya271-hash/tiny11builderpro/main/TinyBuilderPlus.ps1" | iex
->>>>>>> 8e41531c0bd94d12aec81a064170bf878422f09e
-=======
-  irm "https://raw.githubusercontent.com/rabisonshakya271-hash/tiny11builderpro/main/TinyBuilderPlus.ps1" | iex
->>>>>>> 8e41531c0bd94d12aec81a064170bf878422f09e
+

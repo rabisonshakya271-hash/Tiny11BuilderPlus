@@ -112,4 +112,20 @@ model NTLite uses for update integration.
 - This tool doesn't download Windows ISOs or updates for you; you supply
   them, so you stay in control of provenance and licensing.
   
+Quick Start
 
+TinyBuilder+ must be run as Administrator because it performs system-wide changes to the mounted Windows image.
+
+Open PowerShell or Terminal as admin, then run:
+
+Stable Branch (recommended)
+
+powershell
+irm "https://raw.githubusercontent.com/rabisonshakya271-hash/Tiny11BuilderPlus/main/TinyBuilderPlus.ps1" | iex
+How to open an admin terminal
+Start menu: Right-click Start → Windows PowerShell (Admin) or Terminal (Admin)
+Search: Press the Windows key, and type PowerShell or Terminal, then Ctrl + Shift + Enter
+Content
+TinyBuilderPlus.ps1
+
+PS1

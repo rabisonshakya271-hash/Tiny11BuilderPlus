@@ -1,0 +1,23 @@
+{
+  "_comment": "Each entry = one app you want pre-installed in the finished image. 'Source' is a path to the installer on YOUR pc at build time (copied into the image). 'SilentArgs' must be the installer's real silent-install switch — check the vendor's docs. 'RunAs' is usually 'System' (runs during first boot via SetupComplete.cmd) so keep installers that support unattended/system-context installs.",
+  "Apps": [
+    {
+      "Name": "7-Zip",
+      "Source": "C:\\Installers\\7z2408-x64.exe",
+      "SilentArgs": "/S",
+      "Enabled": true
+    },
+    {
+      "Name": "Notepad++",
+      "Source": "C:\\Installers\\npp.8.7.Installer.x64.exe",
+      "SilentArgs": "/S",
+      "Enabled": true
+    },
+    {
+      "Name": "Google Chrome",
+      "Source": "C:\\Installers\\ChromeStandaloneSetup64.exe",
+      "SilentArgs": "/silent /install",
+      "Enabled": false
+    }
+  ]
+}

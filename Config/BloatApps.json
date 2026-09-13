@@ -1,0 +1,55 @@
+{
+  "ProvisionedPackages": [
+    "Clipchamp.Clipchamp",
+    "Microsoft.549981C3F5F10",
+    "Microsoft.BingNews",
+    "Microsoft.BingWeather",
+    "Microsoft.GamingApp",
+    "Microsoft.GetHelp",
+    "Microsoft.Getstarted",
+    "Microsoft.MicrosoftOfficeHub",
+    "Microsoft.MicrosoftSolitaireCollection",
+    "Microsoft.MixedReality.Portal",
+    "Microsoft.People",
+    "Microsoft.PowerAutomateDesktop",
+    "Microsoft.Todos",
+    "Microsoft.WindowsAlarms",
+    "Microsoft.WindowsFeedbackHub",
+    "Microsoft.WindowsMaps",
+    "Microsoft.WindowsSoundRecorder",
+    "Microsoft.Xbox.TCUI",
+    "Microsoft.XboxGamingOverlay",
+    "Microsoft.XboxGameOverlay",
+    "Microsoft.XboxSpeechToTextOverlay",
+    "Microsoft.YourPhone",
+    "Microsoft.ZuneMusic",
+    "Microsoft.ZuneVideo",
+    "MicrosoftCorporationII.MicrosoftFamily",
+    "MicrosoftCorporationII.QuickAssist",
+    "MicrosoftTeams"
+  ],
+  "RegistryTweaks": [
+    {
+      "Description": "Disable telemetry (data collection)",
+      "Hive": "HKLM\\ZSOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection",
+      "Name": "AllowTelemetry",
+      "Type": "DWord",
+      "Value": 0
+    },
+    {
+      "Description": "Disable Consumer Features (suggested apps / ads)",
+      "Hive": "HKLM\\ZSOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+      "Name": "DisableWindowsConsumerFeatures",
+      "Type": "DWord",
+      "Value": 1
+    },
+    {
+      "Description": "Disable Widgets",
+      "Hive": "HKLM\\ZSOFTWARE\\Policies\\Microsoft\\Dsh",
+      "Name": "AllowNewsAndInterests",
+      "Type": "DWord",
+      "Value": 0
+    }
+  ],
+  "Notes": "Hive paths use a mounted offline hive prefixed 'Z' (e.g. HKLM\\ZSOFTWARE) — the build script loads the image's SOFTWARE hive under that temporary key name, edits it, then unloads it. Edit this file freely; no code changes needed to change what gets removed/tweaked."
+}

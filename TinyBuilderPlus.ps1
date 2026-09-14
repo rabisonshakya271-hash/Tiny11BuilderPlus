@@ -1,4 +1,3 @@
-```powershell
 #Requires -RunAsAdministrator
 <#
     TinyBuilderPlus.ps1
@@ -13,10 +12,102 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $ScriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
-Import-Module (Join-Path $ScriptRoot "Modules\ImageHelpers.psm1") -Force
-Import-Module (Join-Path $ScriptRoot "Modules\Debloat.psm1") -Force
-Import-Module (Join-Path $ScriptRoot "Modules\SoftwareInjector.psm1") -Force
-Import-Module (Join-Path $ScriptRoot "Modules\UpdateIntegrator.psm1") -Force
+
+# ---------------------------------------------------------------------
+# Import project modules
+# ---------------------------------------------------------------------
+
+$ImageHelpersPath = Join-Path $ScriptRoot "Modules\ImageHelpers.psm1"
+$DebloatPath = Join-Path $ScriptRoot "Modules\Debloat.psm1"
+$SoftwareInjectorPath = Join-Path $ScriptRoot "Modules\SoftwareInjector.psm1"
+$UpdateIntegratorPath = Join-Path $ScriptRoot "Modules\UpdateIntegrator.psm1"
+
+if (Test-Path -LiteralPath $ImageHelpersPath) {
+    Import-Module $ImageHelpersPath -Force -ErrorAction Stop
+}
+
+if (Test-Path -LiteralPath $DebloatPath) {
+    Import-Module $DebloatPath -Force -ErrorAction Stop
+}
+
+if (Test-Path -LiteralPath $SoftwareInjectorPath) {
+    Import-Module $SoftwareInjectorPath -Force -ErrorAction Stop
+}
+
+if (Test-Path -LiteralPath $UpdateIntegratorPath) {
+    Import-Module $UpdateIntegratorPath -Force -ErrorAction Stop
+}
+
+# =====================================================================
+# FIXED IMAGE HELPER
+# =====================================================================
+
+function Mount-Image {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WimPath,
+
+        [Parameter(Mandatory = $true)]
+        [int]$Index,
+
+        [Parameter(Mandatory = $true)]
+        [string]$MountDir
+    )
+
+    if (-not (Test-Path -LiteralPath $WimPath)) {
+        throw "WIM file not found: $WimPath"
+    }
+
+    if ($Index -lt 1) {
+        throw "Invalid image index: $Index. The index must be 1 or greater."
+    }
+
+    if (-not (Test-Path -LiteralPath $MountDir)) {
+        New-Item `
+            -ItemType Directory `
+            -Path $MountDir `
+            -Force |
+            Out-Null
+    }
+
+    # Make sure the mount directory is empty before mounting.
+    $existingItems = Get-ChildItem `
+        -LiteralPath $MountDir `
+        -Force `
+        -ErrorAction SilentlyContinue
+
+    if ($existingItems) {
+        throw "Mount directory is not empty: $MountDir"
+    }
+
+    Write-Host "Mounting WIM image..."
+    Write-Host "WIM: $WimPath"
+    Write-Host "Index: $Index"
+    Write-Host "Mount directory: $MountDir"
+
+    $arguments = @(
+        "/English",
+        "/Mount-Wim",
+        "/WimFile:$WimPath",
+        "/Index:$Index",
+        "/MountDir:$MountDir"
+    )
+
+    $process = Start-Process `
+        -FilePath "dism.exe" `
+        -ArgumentList $arguments `
+        -Wait `
+        -PassThru `
+        -NoNewWindow
+
+    if ($process.ExitCode -ne 0) {
+        throw "DISM failed to mount the image. Exit code: $($process.ExitCode)"
+    }
+
+    Write-Host "WIM image mounted successfully."
+
+    return $true
+}
 
 # =====================================================================
 # FIXED SECTION — ISO extraction helper
@@ -112,6 +203,7 @@ function Copy-IsoContents {
 $Work = Join-Path $env:TEMP "TinyBuilderPlus"
 $ExtractDir = Join-Path $Work "Extracted"
 $MountDir   = Join-Path $Work "Mount"
+
 New-Item -ItemType Directory -Path $Work -Force | Out-Null
 
 # ---------- Main window ----------
@@ -246,6 +338,27 @@ $buildBtn.Add_Click({
             throw "Select an output ISO path."
         }
 
+        # -------------------------------------------------------------
+        # Validate edition index
+        # -------------------------------------------------------------
+
+        $selectedIndex = 0
+
+        if ($indexBox.Text.Trim()) {
+            if (-not [int]::TryParse(
+                $indexBox.Text.Trim(),
+                [Globalization.NumberStyles]::Integer,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [ref]$selectedIndex
+            )) {
+                throw "Edition index must be a number, for example 1, 2, 3, etc. Do not enter an edition name such as Pro."
+            }
+
+            if ($selectedIndex -lt 1) {
+                throw "Edition index must be 1 or greater."
+            }
+        }
+
         Write-Log "Extracting ISO..."
 
         Copy-IsoContents `
@@ -260,16 +373,21 @@ $buildBtn.Add_Click({
                 throw "install.esd found — enter the edition index to convert (see Get-ImageEditions)."
             }
 
-            Write-Log "Converting install.esd to install.wim for index $($indexBox.Text)..."
+            Write-Log "Converting install.esd to install.wim for index $selectedIndex..."
 
             Convert-EsdToWim `
                 -EsdPath $esdPath `
                 -WimOutPath $wimPath `
-                -Index ([int]$indexBox.Text)
+                -Index $selectedIndex
+        }
+
+        if (-not (Test-Path -LiteralPath $wimPath)) {
+            throw "Could not find or create install.wim: $wimPath"
         }
 
         if (-not $indexBox.Text) {
             $editions = Get-ImageEditions -WimPath $wimPath
+
             $list = ($editions | ForEach-Object {
                 "$($_.Index): $($_.Name)"
             }) -join "`n"
@@ -282,11 +400,11 @@ $buildBtn.Add_Click({
             return
         }
 
-        Write-Log "Mounting image index $($indexBox.Text)..."
+        Write-Log "Mounting image index $selectedIndex..."
 
         Mount-Image `
             -WimPath $wimPath `
-            -Index ([int]$indexBox.Text) `
+            -Index $selectedIndex `
             -MountDir $MountDir
 
         Write-Log "Removing bloat apps..."
@@ -350,11 +468,10 @@ $buildBtn.Add_Click({
     }
 })
 
-
 # =====================================================================
-#  ADDED SECTION — do not remove: Windows 11/10 ISO grabber,
-#  NTLite-style Post Setup (Before/After Login), and Updates manager.
-#  Everything above this point is untouched original code.
+# ADDED SECTION — do not remove: Windows 11/10 ISO grabber,
+# NTLite-style Post Setup (Before/After Login), and Updates manager.
+# Everything above this point is untouched original code.
 # =====================================================================
 
 $form.Size = New-Object System.Drawing.Size(560, 680)
@@ -403,7 +520,8 @@ function Get-FidoScript {
         Invoke-WebRequest `
             -Uri "https://raw.githubusercontent.com/pbatard/Fido/master/Fido.ps1" `
             -OutFile $fidoPath `
-            -UseBasicParsing
+            -UseBasicParsing `
+            -ErrorAction Stop
     }
 
     return $fidoPath
@@ -444,7 +562,8 @@ $downloadIsoBtn.Add_Click({
         Invoke-WebRequest `
             -Uri $url `
             -OutFile $saveDlg.FileName `
-            -UseBasicParsing
+            -UseBasicParsing `
+            -ErrorAction Stop
 
         $isoBox.Text = $saveDlg.FileName
 
@@ -837,7 +956,7 @@ $updatesMgrBtn.Add_Click({
 })
 
 # =====================================================================
-#  END ADDED SECTION
+# END ADDED SECTION
 # =====================================================================
 
 $form.Add_Shown({
@@ -845,4 +964,3 @@ $form.Add_Shown({
 })
 
 [void]$form.ShowDialog()
-```

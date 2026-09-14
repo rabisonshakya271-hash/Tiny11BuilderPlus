@@ -13,6 +13,15 @@ Add-Type -AssemblyName System.Drawing
 
 $ScriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 
+if ([string]::IsNullOrWhiteSpace($ScriptRoot)) {
+    # Fallback for environments where $PSScriptRoot / $MyInvocation.MyCommand.Path
+    # are not populated (e.g. pasted into a console, run via "Run Selection", or
+    # certain compiled/packaged launchers). Prevents $ScriptRoot from ever being
+    # $null, which previously caused Join-Path/Test-Path/Split-Path/Set-Content
+    # errors in the Bloat/Tweak Configure dialog.
+    $ScriptRoot = (Get-Location).Path
+}
+
 # ---------------------------------------------------------------------
 # Import project modules
 # ---------------------------------------------------------------------
@@ -311,12 +320,19 @@ $form.Size            = New-Object System.Drawing.Size(560, 520)
 $form.StartPosition   = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox     = $false
+$form.Font            = New-Object System.Drawing.Font("Segoe UI", 9)
+$form.BackColor       = [System.Drawing.Color]::FromArgb(245, 246, 248)
 
-function New-Label($text, $x, $y, $w = 500) {
+function New-Label($text, $x, $y, $w = 500, [switch]$Bold) {
     $l = New-Object System.Windows.Forms.Label
     $l.Text = $text
     $l.Location = New-Object System.Drawing.Point($x, $y)
     $l.Size = New-Object System.Drawing.Size($w, 20)
+
+    if ($Bold) {
+        $l.Font = New-Object System.Drawing.Font($form.Font, [System.Drawing.FontStyle]::Bold)
+    }
+
     $form.Controls.Add($l)
     return $l
 }
@@ -338,7 +354,7 @@ function New-Button($text, $x, $y, $w = 90) {
     return $b
 }
 
-New-Label "1. Windows 11 ISO path:" 15 15
+New-Label "1. Windows 11 ISO path:" 15 15 500 -Bold
 $isoBox = New-TextBox 15 38
 $isoBrowse = New-Button "Browse..." 375 37 80
 
@@ -352,7 +368,7 @@ $isoBrowse.Add_Click({
 })
 
 # ---------- ADDED: Windows 10 ISO path (mirrors the Windows 11 field above, as-is) ----------
-New-Label "1b. Windows 10 ISO path (optional reference):" 15 68
+New-Label "1b. Windows 10 ISO path (optional reference):" 15 68 500 -Bold
 $iso10Box = New-TextBox 15 90
 $iso10Browse = New-Button "Browse..." 375 89 80
 
@@ -366,10 +382,10 @@ $iso10Browse.Add_Click({
 })
 # ---------- END ADDED: Windows 10 ISO path ----------
 
-New-Label "2. Edition index (leave blank to list editions during build):" 15 120
+New-Label "2. Edition index (leave blank to list editions during build):" 15 120 500 -Bold
 $indexBox = New-TextBox 15 142 100
 
-New-Label "3. Software list (JSON):" 15 180
+New-Label "3. Software list (JSON):" 15 180 500 -Bold
 $appsBox = New-TextBox 15 202
 $appsBox.Text = Join-Path $ScriptRoot "Config\SampleApps.json"
 
@@ -384,7 +400,7 @@ $appsBrowse.Add_Click({
     }
 })
 
-New-Label "4. Updates folder (.msu/.cab), optional:" 15 240
+New-Label "4. Updates folder (.msu/.cab), optional:" 15 240 500 -Bold
 $updatesBox = New-TextBox 15 262
 $updatesBrowse = New-Button "Browse..." 375 261 80
 
@@ -396,7 +412,7 @@ $updatesBrowse.Add_Click({
     }
 })
 
-New-Label "5. Bloat/tweak config (JSON):" 15 300
+New-Label "5. Bloat/tweak config (JSON):" 15 300 500 -Bold
 $bloatBox = New-TextBox 15 322
 $bloatBox.Text = Join-Path $ScriptRoot "Config\BloatApps.json"
 
@@ -413,10 +429,14 @@ $bloatBrowse.Add_Click({
 
 # ---------- ADDED: NTLite-style Configure button for the Bloat/Tweak section ----------
 $bloatConfigureBtn = New-Button "Configure (NTLite-style)..." 15 350 250
+$bloatConfigureBtn.BackColor = [System.Drawing.Color]::FromArgb(0, 153, 102)
+$bloatConfigureBtn.ForeColor = [System.Drawing.Color]::White
+$bloatConfigureBtn.FlatStyle = "Flat"
+$bloatConfigureBtn.FlatAppearance.BorderSize = 0
 # Click handler for this is wired later, once Show-BloatTweakDialog is defined below.
 # ---------- END ADDED ----------
 
-New-Label "6. Output ISO path:" 15 385
+New-Label "6. Output ISO path:" 15 385 500 -Bold
 $outBox = New-TextBox 15 407
 $outBrowse = New-Button "Browse..." 375 406 80
 
@@ -443,6 +463,11 @@ function Write-Log($msg) {
 }
 
 $buildBtn = New-Button "Build Image" 15 525 150
+$buildBtn.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
+$buildBtn.ForeColor = [System.Drawing.Color]::White
+$buildBtn.FlatStyle = "Flat"
+$buildBtn.FlatAppearance.BorderSize = 0
+$buildBtn.Font = New-Object System.Drawing.Font($form.Font, [System.Drawing.FontStyle]::Bold)
 
 $buildBtn.Add_Click({
     try {
@@ -638,11 +663,15 @@ $buildBtn.Add_Click({
 $form.Size = New-Object System.Drawing.Size(560, 760)
 
 # ---------- Get Windows ISO ----------
-New-Label "7. Get Windows ISO:" 15 560
+New-Label "7. Get Windows ISO:" 15 560 500 -Bold
 
 $win11Btn = New-Button "Windows 11" 15 582 100
 $win10Btn = New-Button "Windows 10" 130 582 100
 $downloadIsoBtn = New-Button "Download ISO..." 245 582 140
+$downloadIsoBtn.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
+$downloadIsoBtn.ForeColor = [System.Drawing.Color]::White
+$downloadIsoBtn.FlatStyle = "Flat"
+$downloadIsoBtn.FlatAppearance.BorderSize = 0
 
 $isoStatusLabel = New-Label `
     "Selected: Windows 11 — opens Microsoft's official page. Use Download ISO to fetch it automatically." `
@@ -756,7 +785,7 @@ $downloadIsoBtn.Add_Click({
 })
 
 # ---------- Post Setup / Updates launcher buttons ----------
-New-Label "8. Post Setup & Updates (NTLite-style):" 15 640
+New-Label "8. Post Setup & Updates (NTLite-style):" 15 640 500 -Bold
 
 $postSetupBtn = New-Button "Post Setup..." 15 662 150
 $updatesMgrBtn = New-Button "Updates..." 175 662 150
@@ -923,6 +952,8 @@ function Show-PostSetupDialog {
     $dlg.StartPosition = "CenterParent"
     $dlg.FormBorderStyle = "FixedDialog"
     $dlg.MaximizeBox = $false
+    $dlg.Font = $form.Font
+    $dlg.BackColor = [System.Drawing.Color]::FromArgb(250, 250, 251)
 
     $tabs = New-Object System.Windows.Forms.TabControl
     $tabs.Location = New-Object System.Drawing.Point(10, 10)
@@ -943,6 +974,10 @@ function Show-PostSetupDialog {
     $saveBtn.Text = "Save && Close"
     $saveBtn.Location = New-Object System.Drawing.Point(345, 345)
     $saveBtn.Size = New-Object System.Drawing.Size(115, 28)
+    $saveBtn.BackColor = [System.Drawing.Color]::FromArgb(0, 153, 102)
+    $saveBtn.ForeColor = [System.Drawing.Color]::White
+    $saveBtn.FlatStyle = "Flat"
+    $saveBtn.FlatAppearance.BorderSize = 0
     $dlg.Controls.Add($saveBtn)
 
     $saveBtn.Add_Click({
@@ -1069,15 +1104,23 @@ function New-BloatTweakTab {
     $tab.Controls.Add($selNoneBtn)
 
     $selAllBtn.Add_Click({
+        $clb.BeginUpdate()
+
         for ($i = 0; $i -lt $clb.Items.Count; $i++) {
             $clb.SetItemChecked($i, $true)
         }
+
+        $clb.EndUpdate()
     })
 
     $selNoneBtn.Add_Click({
+        $clb.BeginUpdate()
+
         for ($i = 0; $i -lt $clb.Items.Count; $i++) {
             $clb.SetItemChecked($i, $false)
         }
+
+        $clb.EndUpdate()
     })
 
     return $clb
@@ -1085,6 +1128,12 @@ function New-BloatTweakTab {
 
 function Show-BloatTweakDialog {
     $cfgPath = if ($bloatBox.Text) { $bloatBox.Text } else { Join-Path $ScriptRoot "Config\BloatApps.json" }
+
+    if ([string]::IsNullOrWhiteSpace($cfgPath)) {
+        # Extra safety net: should not trigger now that $ScriptRoot always has a
+        # value, but guarantees Save can never fail with a null path.
+        $cfgPath = Join-Path (Get-Location).Path "Config\BloatApps.json"
+    }
 
     # Load any existing selections so re-opening the dialog reflects prior choices.
     $existingApps = @()
@@ -1109,14 +1158,21 @@ function Show-BloatTweakDialog {
 
     $dlg = New-Object System.Windows.Forms.Form
     $dlg.Text = "Bloat/Tweak Configuration (NTLite-style)"
-    $dlg.Size = New-Object System.Drawing.Size(480, 460)
+    $dlg.Size = New-Object System.Drawing.Size(480, 500)
     $dlg.StartPosition = "CenterParent"
     $dlg.FormBorderStyle = "FixedDialog"
     $dlg.MaximizeBox = $false
+    $dlg.Font = $form.Font
+    $dlg.BackColor = [System.Drawing.Color]::FromArgb(250, 250, 251)
 
     $tabs = New-Object System.Windows.Forms.TabControl
     $tabs.Location = New-Object System.Drawing.Point(10, 10)
-    $tabs.Size = New-Object System.Drawing.Size(450, 360)
+    # Height increased from 360 -> 400 so the CheckedListBox (300px) plus the
+    # Select All / Select None buttons (which sit below it at y=318) both fit
+    # inside the tab's visible client area. At 360 the buttons were clipped
+    # past the bottom of the tab page and effectively unreachable, which is
+    # why "Select All" / "Select None" appeared to do nothing.
+    $tabs.Size = New-Object System.Drawing.Size(450, 400)
     $dlg.Controls.Add($tabs)
 
     $appsClb = New-BloatTweakTab `
@@ -1133,8 +1189,12 @@ function Show-BloatTweakDialog {
 
     $saveBtn = New-Object System.Windows.Forms.Button
     $saveBtn.Text = "Save && Close"
-    $saveBtn.Location = New-Object System.Drawing.Point(345, 380)
+    $saveBtn.Location = New-Object System.Drawing.Point(345, 420)
     $saveBtn.Size = New-Object System.Drawing.Size(115, 28)
+    $saveBtn.BackColor = [System.Drawing.Color]::FromArgb(0, 153, 102)
+    $saveBtn.ForeColor = [System.Drawing.Color]::White
+    $saveBtn.FlatStyle = "Flat"
+    $saveBtn.FlatAppearance.BorderSize = 0
     $dlg.Controls.Add($saveBtn)
 
     $saveBtn.Add_Click({
@@ -1191,6 +1251,8 @@ function Show-UpdatesDialog {
     $dlg.StartPosition = "CenterParent"
     $dlg.FormBorderStyle = "FixedDialog"
     $dlg.MaximizeBox = $false
+    $dlg.Font = $form.Font
+    $dlg.BackColor = [System.Drawing.Color]::FromArgb(250, 250, 251)
 
     $folderLbl = New-Object System.Windows.Forms.Label
     $folderLbl.Text = "Updates folder (.msu/.cab)"
@@ -1310,6 +1372,10 @@ function Show-UpdatesDialog {
     $closeBtn.Text = "Save && Close"
     $closeBtn.Location = New-Object System.Drawing.Point(360, 318)
     $closeBtn.Size = New-Object System.Drawing.Size(90, 28)
+    $closeBtn.BackColor = [System.Drawing.Color]::FromArgb(0, 153, 102)
+    $closeBtn.ForeColor = [System.Drawing.Color]::White
+    $closeBtn.FlatStyle = "Flat"
+    $closeBtn.FlatAppearance.BorderSize = 0
     $dlg.Controls.Add($closeBtn)
 
     $closeBtn.Add_Click({

@@ -1,3 +1,4 @@
+```powershell
 #Requires -RunAsAdministrator
 <#
     TinyBuilderPlus.ps1
@@ -54,7 +55,7 @@ function Mount-Image {
         [string]$MountDir
     )
 
-    if (-not (Test-Path -LiteralPath $WimPath)) {
+    if (-not (Test-Path -LiteralPath $WimPath -PathType Leaf)) {
         throw "WIM file not found: $WimPath"
     }
 
@@ -62,6 +63,26 @@ function Mount-Image {
         throw "Invalid image index: $Index. The index must be 1 or greater."
     }
 
+    $WimPath = [System.IO.Path]::GetFullPath($WimPath)
+    $MountDir = [System.IO.Path]::GetFullPath($MountDir)
+
+    Write-Host "Checking DISM mounted-image state..."
+
+    # Recover any stale mount associated with this mount directory.
+    $mountedInfo = & dism.exe /English /Get-MountedImageInfo 2>&1
+
+    if ($mountedInfo -match [regex]::Escape($MountDir)) {
+        Write-Host "Existing DISM mount detected at: $MountDir"
+        Write-Host "Attempting to discard existing mount..."
+
+        & dism.exe /English /Unmount-Image `
+            /MountDir:$MountDir `
+            /Discard 2>&1 | Out-Host
+
+        Start-Sleep -Seconds 2
+    }
+
+    # Make sure the mount directory exists.
     if (-not (Test-Path -LiteralPath $MountDir)) {
         New-Item `
             -ItemType Directory `
@@ -70,14 +91,66 @@ function Mount-Image {
             Out-Null
     }
 
-    # Make sure the mount directory is empty before mounting.
+    # DISM requires an empty mount directory.
     $existingItems = Get-ChildItem `
         -LiteralPath $MountDir `
         -Force `
         -ErrorAction SilentlyContinue
 
     if ($existingItems) {
-        throw "Mount directory is not empty: $MountDir"
+        Write-Host "Cleaning existing mount directory..."
+
+        Get-ChildItem `
+            -LiteralPath $MountDir `
+            -Force `
+            -ErrorAction SilentlyContinue |
+            Remove-Item `
+                -Recurse `
+                -Force `
+                -ErrorAction Stop
+    }
+
+    $existingItems = Get-ChildItem `
+        -LiteralPath $MountDir `
+        -Force `
+        -ErrorAction SilentlyContinue
+
+    if ($existingItems) {
+        throw "Mount directory could not be emptied: $MountDir"
+    }
+
+    Write-Host "Removing Read-Only attribute from WIM..."
+
+    # Windows ISO files are normally read-only.
+    # DISM needs the WIM to be writable.
+    & attrib.exe -R $WimPath 2>&1 | Out-Null
+
+    try {
+        $wimItem = Get-Item -LiteralPath $WimPath -Force -ErrorAction Stop
+
+        if (($wimItem.Attributes -band [System.IO.FileAttributes]::ReadOnly) -ne 0) {
+            $wimItem.Attributes = $wimItem.Attributes `
+                -band (-bnot [System.IO.FileAttributes]::ReadOnly)
+        }
+    }
+    catch {
+        throw "Could not remove the Read-Only attribute from the WIM: $WimPath"
+    }
+
+    # Verify that the WIM can actually be opened for read/write access.
+    try {
+        $testStream = [System.IO.File]::Open(
+            $WimPath,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::Read
+        )
+
+        $testStream.Close()
+        $testStream.Dispose()
+    }
+    catch {
+        throw "The WIM is not writable: $WimPath`n`nClose any application using the WIM and make sure the working folder is on a writable local drive."
     }
 
     Write-Host "Mounting WIM image..."
@@ -90,7 +163,8 @@ function Mount-Image {
         "/Mount-Wim",
         "/WimFile:$WimPath",
         "/Index:$Index",
-        "/MountDir:$MountDir"
+        "/MountDir:$MountDir",
+        "/CheckIntegrity"
     )
 
     $process = Start-Process `
@@ -101,7 +175,9 @@ function Mount-Image {
         -NoNewWindow
 
     if ($process.ExitCode -ne 0) {
-        throw "DISM failed to mount the image. Exit code: $($process.ExitCode)"
+        $hexCode = '0x{0:X8}' -f ([uint32]$process.ExitCode)
+
+        throw "DISM failed to mount the image. Exit code: $($process.ExitCode) ($hexCode)`n`nDISM error 0xC1510111 means the WIM could not be mounted for modification. The WIM must be writable and the mount directory must be empty."
     }
 
     Write-Host "WIM image mounted successfully."
@@ -162,6 +238,7 @@ function Copy-IsoContents {
                 "$DestFolder\",
                 "/E",
                 "/COPY:DAT",
+                "/A-:R",
                 "/DCOPY:DAT",
                 "/R:1",
                 "/W:1",
@@ -182,6 +259,28 @@ function Copy-IsoContents {
                 throw "Robocopy failed while extracting the ISO. Exit code: $($process.ExitCode)"
             }
 
+            # ISO files can inherit the Read-Only attribute.
+            # Make install.wim writable before DISM attempts to service it.
+            $copiedWim = Join-Path $DestFolder "sources\install.wim"
+
+            if (Test-Path -LiteralPath $copiedWim) {
+                Write-Log "Making install.wim writable..."
+
+                & attrib.exe -R $copiedWim 2>&1 | Out-Null
+
+                try {
+                    $wimItem = Get-Item -LiteralPath $copiedWim -Force -ErrorAction Stop
+
+                    if (($wimItem.Attributes -band [System.IO.FileAttributes]::ReadOnly) -ne 0) {
+                        $wimItem.Attributes = $wimItem.Attributes `
+                            -band (-bnot [System.IO.FileAttributes]::ReadOnly)
+                    }
+                }
+                catch {
+                    throw "Could not remove Read-Only attribute from install.wim: $copiedWim"
+                }
+            }
+
             Write-Log "ISO contents copied successfully."
         }
         finally {
@@ -200,7 +299,7 @@ function Copy-IsoContents {
 }
 
 # ---------- Working paths ----------
-$Work = Join-Path $env:TEMP "TinyBuilderPlus"
+$Work = Join-Path $env:SystemDrive "TinyBuilderPlus_Work"
 $ExtractDir = Join-Path $Work "Extracted"
 $MountDir   = Join-Path $Work "Mount"
 
@@ -359,6 +458,32 @@ $buildBtn.Add_Click({
             }
         }
 
+        Write-Log "Preparing working directories..."
+
+        # Ensure the extraction and mount directories are usable.
+        if (-not (Test-Path -LiteralPath $ExtractDir)) {
+            New-Item -ItemType Directory -Path $ExtractDir -Force | Out-Null
+        }
+
+        if (-not (Test-Path -LiteralPath $MountDir)) {
+            New-Item -ItemType Directory -Path $MountDir -Force | Out-Null
+        }
+
+        # Remove stale files from a previous extraction only when
+        # no DISM image is currently mounted there.
+        $mountedInfo = & dism.exe /English /Get-MountedImageInfo 2>&1
+
+        if ($mountedInfo -match [regex]::Escape($MountDir)) {
+            Write-Log "A previous DISM mount was detected."
+            Write-Log "Discarding previous mount..."
+
+            & dism.exe /English /Unmount-Image `
+                /MountDir:$MountDir `
+                /Discard 2>&1 | Out-Host
+
+            Start-Sleep -Seconds 2
+        }
+
         Write-Log "Extracting ISO..."
 
         Copy-IsoContents `
@@ -383,6 +508,23 @@ $buildBtn.Add_Click({
 
         if (-not (Test-Path -LiteralPath $wimPath)) {
             throw "Could not find or create install.wim: $wimPath"
+        }
+
+        # Ensure the final WIM is writable after extraction/conversion.
+        Write-Log "Checking install.wim permissions..."
+
+        & attrib.exe -R $wimPath 2>&1 | Out-Null
+
+        try {
+            $wimItem = Get-Item -LiteralPath $wimPath -Force -ErrorAction Stop
+
+            if (($wimItem.Attributes -band [System.IO.FileAttributes]::ReadOnly) -ne 0) {
+                $wimItem.Attributes = $wimItem.Attributes `
+                    -band (-bnot [System.IO.FileAttributes]::ReadOnly)
+            }
+        }
+        catch {
+            throw "The install.wim could not be made writable: $wimPath"
         }
 
         if (-not $indexBox.Text) {
@@ -964,3 +1106,20 @@ $form.Add_Shown({
 })
 
 [void]$form.ShowDialog()
+```
+
+### What was fixed without removing your features
+
+The important changes are only in the servicing path:
+
+* `install.wim` is explicitly made **writable**.
+* Read-only attributes inherited from the ISO are removed.
+* The WIM is tested for actual **ReadWrite** access.
+* A stale DISM mount is detected and discarded.
+* The mount directory is guaranteed to be empty.
+* The working directory is moved from `%TEMP%` to `C:\TinyBuilderPlus_Work`.
+* `0xC1510111` is displayed in hexadecimal as well as decimal.
+* Your edition-index validation remains intact, so entering `Pro` still correctly produces the helpful index message.
+* Your ISO downloader, Post Setup, Updates manager, bloat removal, registry tweaks, software injection, update integration, commit, and ISO export remain present.
+
+**Important:** save the file as `TinyBuilderPlus.ps1` and replace the existing file completely with the code above. Run it **as Administrator**.

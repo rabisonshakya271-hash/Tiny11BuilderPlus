@@ -1,4 +1,3 @@
-```powershell
 #Requires -RunAsAdministrator
 <#
     TinyBuilderPlus.ps1
@@ -352,14 +351,29 @@ $isoBrowse.Add_Click({
     }
 })
 
-New-Label "2. Edition index (leave blank to list editions during build):" 15 70
-$indexBox = New-TextBox 15 92 100
+# ---------- ADDED: Windows 10 ISO path (mirrors the Windows 11 field above, as-is) ----------
+New-Label "1b. Windows 10 ISO path (optional reference):" 15 68
+$iso10Box = New-TextBox 15 90
+$iso10Browse = New-Button "Browse..." 375 89 80
 
-New-Label "3. Software list (JSON):" 15 130
-$appsBox = New-TextBox 15 152
+$iso10Browse.Add_Click({
+    $dlg = New-Object System.Windows.Forms.OpenFileDialog
+    $dlg.Filter = "ISO files (*.iso)|*.iso"
+
+    if ($dlg.ShowDialog() -eq "OK") {
+        $iso10Box.Text = $dlg.FileName
+    }
+})
+# ---------- END ADDED: Windows 10 ISO path ----------
+
+New-Label "2. Edition index (leave blank to list editions during build):" 15 120
+$indexBox = New-TextBox 15 142 100
+
+New-Label "3. Software list (JSON):" 15 180
+$appsBox = New-TextBox 15 202
 $appsBox.Text = Join-Path $ScriptRoot "Config\SampleApps.json"
 
-$appsBrowse = New-Button "Browse..." 375 151 80
+$appsBrowse = New-Button "Browse..." 375 201 80
 
 $appsBrowse.Add_Click({
     $dlg = New-Object System.Windows.Forms.OpenFileDialog
@@ -370,9 +384,9 @@ $appsBrowse.Add_Click({
     }
 })
 
-New-Label "4. Updates folder (.msu/.cab), optional:" 15 190
-$updatesBox = New-TextBox 15 212
-$updatesBrowse = New-Button "Browse..." 375 211 80
+New-Label "4. Updates folder (.msu/.cab), optional:" 15 240
+$updatesBox = New-TextBox 15 262
+$updatesBrowse = New-Button "Browse..." 375 261 80
 
 $updatesBrowse.Add_Click({
     $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -382,11 +396,11 @@ $updatesBrowse.Add_Click({
     }
 })
 
-New-Label "5. Bloat/tweak config (JSON):" 15 250
-$bloatBox = New-TextBox 15 272
+New-Label "5. Bloat/tweak config (JSON):" 15 300
+$bloatBox = New-TextBox 15 322
 $bloatBox.Text = Join-Path $ScriptRoot "Config\BloatApps.json"
 
-$bloatBrowse = New-Button "Browse..." 375 271 80
+$bloatBrowse = New-Button "Browse..." 375 321 80
 
 $bloatBrowse.Add_Click({
     $dlg = New-Object System.Windows.Forms.OpenFileDialog
@@ -397,9 +411,14 @@ $bloatBrowse.Add_Click({
     }
 })
 
-New-Label "6. Output ISO path:" 15 310
-$outBox = New-TextBox 15 332
-$outBrowse = New-Button "Browse..." 375 331 80
+# ---------- ADDED: NTLite-style Configure button for the Bloat/Tweak section ----------
+$bloatConfigureBtn = New-Button "Configure (NTLite-style)..." 15 350 250
+# Click handler for this is wired later, once Show-BloatTweakDialog is defined below.
+# ---------- END ADDED ----------
+
+New-Label "6. Output ISO path:" 15 385
+$outBox = New-TextBox 15 407
+$outBrowse = New-Button "Browse..." 375 406 80
 
 $outBrowse.Add_Click({
     $dlg = New-Object System.Windows.Forms.SaveFileDialog
@@ -414,7 +433,7 @@ $logBox = New-Object System.Windows.Forms.TextBox
 $logBox.Multiline = $true
 $logBox.ScrollBars = "Vertical"
 $logBox.ReadOnly = $true
-$logBox.Location = New-Object System.Drawing.Point(15, 370)
+$logBox.Location = New-Object System.Drawing.Point(15, 445)
 $logBox.Size = New-Object System.Drawing.Size(515, 70)
 $form.Controls.Add($logBox)
 
@@ -423,7 +442,7 @@ function Write-Log($msg) {
     [System.Windows.Forms.Application]::DoEvents()
 }
 
-$buildBtn = New-Button "Build Image" 15 450 150
+$buildBtn = New-Button "Build Image" 15 525 150
 
 $buildBtn.Add_Click({
     try {
@@ -612,23 +631,23 @@ $buildBtn.Add_Click({
 
 # =====================================================================
 # ADDED SECTION — do not remove: Windows 11/10 ISO grabber,
-# NTLite-style Post Setup (Before/After Login), and Updates manager.
-# Everything above this point is untouched original code.
+# NTLite-style Post Setup (Before/After Login), NTLite-style Bloat/Tweak
+# picker, and Updates manager.
 # =====================================================================
 
-$form.Size = New-Object System.Drawing.Size(560, 680)
+$form.Size = New-Object System.Drawing.Size(560, 760)
 
 # ---------- Get Windows ISO ----------
-New-Label "7. Get Windows ISO:" 15 485
+New-Label "7. Get Windows ISO:" 15 560
 
-$win11Btn = New-Button "Windows 11" 15 507 100
-$win10Btn = New-Button "Windows 10" 130 507 100
-$downloadIsoBtn = New-Button "Download ISO..." 245 507 140
+$win11Btn = New-Button "Windows 11" 15 582 100
+$win10Btn = New-Button "Windows 10" 130 582 100
+$downloadIsoBtn = New-Button "Download ISO..." 245 582 140
 
 $isoStatusLabel = New-Label `
     "Selected: Windows 11 — opens Microsoft's official page. Use Download ISO to fetch it automatically." `
     15 `
-    535 `
+    610 `
     515
 
 $script:SelectedWinVersion = "11"
@@ -707,7 +726,12 @@ $downloadIsoBtn.Add_Click({
             -UseBasicParsing `
             -ErrorAction Stop
 
-        $isoBox.Text = $saveDlg.FileName
+        if ($script:SelectedWinVersion -eq "10") {
+            $iso10Box.Text = $saveDlg.FileName
+        }
+        else {
+            $isoBox.Text = $saveDlg.FileName
+        }
 
         Write-Log "Download complete: $($saveDlg.FileName)"
 
@@ -732,10 +756,10 @@ $downloadIsoBtn.Add_Click({
 })
 
 # ---------- Post Setup / Updates launcher buttons ----------
-New-Label "8. Post Setup & Updates (NTLite-style):" 15 565
+New-Label "8. Post Setup & Updates (NTLite-style):" 15 640
 
-$postSetupBtn = New-Button "Post Setup..." 15 587 150
-$updatesMgrBtn = New-Button "Updates..." 175 587 150
+$postSetupBtn = New-Button "Post Setup..." 15 662 150
+$updatesMgrBtn = New-Button "Updates..." 175 662 150
 
 # ---------- Post Setup data (Before Login / After Login) ----------
 $script:PostSetupBeforeLogin = New-Object System.Collections.ArrayList
@@ -956,6 +980,209 @@ $postSetupBtn.Add_Click({
     Show-PostSetupDialog
 })
 
+# ---------- NTLite-style Bloat/Tweak picker ----------
+# NOTE: this writes { "Apps": [...package family names...], "Tweaks": [...tweak ids...] }
+# to the path in the "5. Bloat/tweak config (JSON)" box. If your Debloat.psm1 module
+# expects a different JSON shape, adjust the property names below or in the module.
+
+$script:BloatAppCatalog = @(
+    @{ Name = "3D Viewer";                          Id = "Microsoft.Microsoft3DViewer" },
+    @{ Name = "Bing News";                           Id = "Microsoft.BingNews" },
+    @{ Name = "Bing Weather";                        Id = "Microsoft.BingWeather" },
+    @{ Name = "Clipchamp";                           Id = "Clipchamp.Clipchamp" },
+    @{ Name = "Cortana";                             Id = "Microsoft.549981C3F5F10" },
+    @{ Name = "Feedback Hub";                        Id = "Microsoft.WindowsFeedbackHub" },
+    @{ Name = "Get Help";                            Id = "Microsoft.GetHelp" },
+    @{ Name = "Getting Started / Tips";              Id = "Microsoft.Getstarted" },
+    @{ Name = "Maps";                                Id = "Microsoft.WindowsMaps" },
+    @{ Name = "Mixed Reality Portal";                Id = "Microsoft.MixedReality.Portal" },
+    @{ Name = "Office Hub";                          Id = "Microsoft.MicrosoftOfficeHub" },
+    @{ Name = "OneNote";                             Id = "Microsoft.Office.OneNote" },
+    @{ Name = "Paint 3D";                            Id = "Microsoft.MSPaint" },
+    @{ Name = "People";                              Id = "Microsoft.People" },
+    @{ Name = "Power Automate Desktop";              Id = "Microsoft.PowerAutomateDesktop" },
+    @{ Name = "Skype";                               Id = "Microsoft.SkypeApp" },
+    @{ Name = "Solitaire Collection";                Id = "Microsoft.MicrosoftSolitaireCollection" },
+    @{ Name = "Sticky Notes";                        Id = "Microsoft.MicrosoftStickyNotes" },
+    @{ Name = "Teams (Consumer)";                    Id = "MicrosoftTeams" },
+    @{ Name = "To Do";                               Id = "Microsoft.Todos" },
+    @{ Name = "Wallet";                              Id = "Microsoft.Wallet" },
+    @{ Name = "Xbox App";                            Id = "Microsoft.GamingApp" },
+    @{ Name = "Xbox Game Bar";                       Id = "Microsoft.XboxGamingOverlay" },
+    @{ Name = "Xbox Identity Provider";              Id = "Microsoft.XboxIdentityProvider" },
+    @{ Name = "Xbox Speech to Text";                 Id = "Microsoft.XboxSpeechToTextOverlay" },
+    @{ Name = "Your Phone / Phone Link";             Id = "Microsoft.YourPhone" },
+    @{ Name = "Zune Music";                          Id = "Microsoft.ZuneMusic" },
+    @{ Name = "Zune Video";                          Id = "Microsoft.ZuneVideo" }
+)
+
+$script:TweakCatalog = @(
+    @{ Name = "Disable Telemetry";                              Id = "DisableTelemetry" },
+    @{ Name = "Disable Consumer Features (suggested apps)";     Id = "DisableConsumerFeatures" },
+    @{ Name = "Disable Cortana";                                Id = "DisableCortana" },
+    @{ Name = "Disable Bing Search in Start Menu";              Id = "DisableBingSearch" },
+    @{ Name = "Disable Widgets";                                Id = "DisableWidgets" },
+    @{ Name = "Disable Copilot";                                Id = "DisableCopilot" },
+    @{ Name = "Disable OneDrive Integration";                   Id = "DisableOneDrive" },
+    @{ Name = "Disable Windows Tips / Suggestions";             Id = "DisableTips" },
+    @{ Name = "Disable Fast Startup";                           Id = "DisableFastStartup" },
+    @{ Name = "Show File Extensions";                           Id = "ShowFileExtensions" },
+    @{ Name = "Show Hidden Files";                              Id = "ShowHiddenFiles" },
+    @{ Name = "Disable Lock Screen";                            Id = "DisableLockScreen" },
+    @{ Name = "Disable Web Search in File Explorer";            Id = "DisableExplorerWebSearch" },
+    @{ Name = "Classic Right-Click Context Menu (Win11)";       Id = "ClassicContextMenu" }
+)
+
+function New-BloatTweakTab {
+    param(
+        $TabControl,
+        $Title,
+        [array]$Catalog,
+        [string[]]$PreChecked
+    )
+
+    $tab = New-Object System.Windows.Forms.TabPage
+    $tab.Text = $Title
+    $TabControl.TabPages.Add($tab)
+
+    $clb = New-Object System.Windows.Forms.CheckedListBox
+    $clb.Location = New-Object System.Drawing.Point(10, 10)
+    $clb.Size = New-Object System.Drawing.Size(430, 300)
+    $clb.CheckOnClick = $true
+    $tab.Controls.Add($clb)
+
+    foreach ($entry in $Catalog) {
+        $checked = $PreChecked -contains $entry.Id
+        [void]$clb.Items.Add($entry.Name, $checked)
+    }
+
+    $selAllBtn = New-Object System.Windows.Forms.Button
+    $selAllBtn.Text = "Select All"
+    $selAllBtn.Location = New-Object System.Drawing.Point(10, 318)
+    $selAllBtn.Size = New-Object System.Drawing.Size(100, 26)
+    $tab.Controls.Add($selAllBtn)
+
+    $selNoneBtn = New-Object System.Windows.Forms.Button
+    $selNoneBtn.Text = "Select None"
+    $selNoneBtn.Location = New-Object System.Drawing.Point(120, 318)
+    $selNoneBtn.Size = New-Object System.Drawing.Size(100, 26)
+    $tab.Controls.Add($selNoneBtn)
+
+    $selAllBtn.Add_Click({
+        for ($i = 0; $i -lt $clb.Items.Count; $i++) {
+            $clb.SetItemChecked($i, $true)
+        }
+    })
+
+    $selNoneBtn.Add_Click({
+        for ($i = 0; $i -lt $clb.Items.Count; $i++) {
+            $clb.SetItemChecked($i, $false)
+        }
+    })
+
+    return $clb
+}
+
+function Show-BloatTweakDialog {
+    $cfgPath = if ($bloatBox.Text) { $bloatBox.Text } else { Join-Path $ScriptRoot "Config\BloatApps.json" }
+
+    # Load any existing selections so re-opening the dialog reflects prior choices.
+    $existingApps = @()
+    $existingTweaks = @()
+
+    if (Test-Path -LiteralPath $cfgPath) {
+        try {
+            $existingCfg = Get-Content -LiteralPath $cfgPath -Raw | ConvertFrom-Json
+
+            if ($existingCfg.Apps) {
+                $existingApps = @($existingCfg.Apps)
+            }
+
+            if ($existingCfg.Tweaks) {
+                $existingTweaks = @($existingCfg.Tweaks)
+            }
+        }
+        catch {
+            Write-Log "Could not parse existing config, starting fresh: $cfgPath"
+        }
+    }
+
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = "Bloat/Tweak Configuration (NTLite-style)"
+    $dlg.Size = New-Object System.Drawing.Size(480, 460)
+    $dlg.StartPosition = "CenterParent"
+    $dlg.FormBorderStyle = "FixedDialog"
+    $dlg.MaximizeBox = $false
+
+    $tabs = New-Object System.Windows.Forms.TabControl
+    $tabs.Location = New-Object System.Drawing.Point(10, 10)
+    $tabs.Size = New-Object System.Drawing.Size(450, 360)
+    $dlg.Controls.Add($tabs)
+
+    $appsClb = New-BloatTweakTab `
+        -TabControl $tabs `
+        -Title "Apps to Remove" `
+        -Catalog $script:BloatAppCatalog `
+        -PreChecked $existingApps
+
+    $tweaksClb = New-BloatTweakTab `
+        -TabControl $tabs `
+        -Title "Tweaks to Apply" `
+        -Catalog $script:TweakCatalog `
+        -PreChecked $existingTweaks
+
+    $saveBtn = New-Object System.Windows.Forms.Button
+    $saveBtn.Text = "Save && Close"
+    $saveBtn.Location = New-Object System.Drawing.Point(345, 380)
+    $saveBtn.Size = New-Object System.Drawing.Size(115, 28)
+    $dlg.Controls.Add($saveBtn)
+
+    $saveBtn.Add_Click({
+        $selectedApps = @()
+
+        for ($i = 0; $i -lt $appsClb.Items.Count; $i++) {
+            if ($appsClb.GetItemChecked($i)) {
+                $selectedApps += $script:BloatAppCatalog[$i].Id
+            }
+        }
+
+        $selectedTweaks = @()
+
+        for ($i = 0; $i -lt $tweaksClb.Items.Count; $i++) {
+            if ($tweaksClb.GetItemChecked($i)) {
+                $selectedTweaks += $script:TweakCatalog[$i].Id
+            }
+        }
+
+        $cfgDir = Split-Path -Parent $cfgPath
+
+        if ($cfgDir -and -not (Test-Path -LiteralPath $cfgDir)) {
+            New-Item -ItemType Directory -Path $cfgDir -Force | Out-Null
+        }
+
+        $cfg = [PSCustomObject]@{
+            Apps   = $selectedApps
+            Tweaks = $selectedTweaks
+        }
+
+        $cfg |
+            ConvertTo-Json -Depth 5 |
+            Set-Content -Path $cfgPath -Encoding UTF8
+
+        $bloatBox.Text = $cfgPath
+
+        Write-Log "Bloat/tweak config saved: $cfgPath ($($selectedApps.Count) apps, $($selectedTweaks.Count) tweaks)"
+
+        $dlg.Close()
+    })
+
+    $dlg.ShowDialog() | Out-Null
+}
+
+$bloatConfigureBtn.Add_Click({
+    Show-BloatTweakDialog
+})
+
 # ---------- Updates manager (NTLite-style) ----------
 function Show-UpdatesDialog {
     $dlg = New-Object System.Windows.Forms.Form
@@ -1106,20 +1333,3 @@ $form.Add_Shown({
 })
 
 [void]$form.ShowDialog()
-```
-
-### What was fixed without removing your features
-
-The important changes are only in the servicing path:
-
-* `install.wim` is explicitly made **writable**.
-* Read-only attributes inherited from the ISO are removed.
-* The WIM is tested for actual **ReadWrite** access.
-* A stale DISM mount is detected and discarded.
-* The mount directory is guaranteed to be empty.
-* The working directory is moved from `%TEMP%` to `C:\TinyBuilderPlus_Work`.
-* `0xC1510111` is displayed in hexadecimal as well as decimal.
-* Your edition-index validation remains intact, so entering `Pro` still correctly produces the helpful index message.
-* Your ISO downloader, Post Setup, Updates manager, bloat removal, registry tweaks, software injection, update integration, commit, and ISO export remain present.
-
-**Important:** save the file as `TinyBuilderPlus.ps1` and replace the existing file completely with the code above. Run it **as Administrator**.
